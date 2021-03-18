@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Vscode
+.vscode/
+
+# Unverified / untested code
+.unverified/
