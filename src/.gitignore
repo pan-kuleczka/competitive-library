@@ -1,0 +1,4 @@
+# Ignore extensionless files (binaries)
+*
+!*/
+!*.*
