@@ -165,7 +165,7 @@ public:
 
         if (inverseTransform)
             for (_complexClass &x : vec)
-                x /= _complexClass(n, 0);
+                x /= _complexClass(n);
     }
 };
 

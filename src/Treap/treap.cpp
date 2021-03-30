@@ -1,7 +1,7 @@
 #include <bits/stdc++.h>
 
 // Conditional compilation to reduce memory and time requirements (select only the features you need)
-#define TREAP_KEY_SUM true // adds information about sum of the keys in a subtree
+#define TREAP_KEY_SUM true           // adds information about sum of the keys in a subtree
 #define TREAP_REVERSE_OPERATION true // adds operation reversing a subtree
 
 std::random_device rd;
@@ -19,14 +19,13 @@ public:
     };
 
 private:
-
-    #if TREAP_KEY_SUM
+#if TREAP_KEY_SUM
     _keyType subtreeSum;
-    #endif
+#endif
 
-    #if TREAP_REVERSE_OPERATION
+#if TREAP_REVERSE_OPERATION
     bool reversed = false;
-    #endif
+#endif
 
     _keyType key;
     unsigned int priority;
@@ -36,37 +35,47 @@ private:
     TreapNode<_keyType> *rightChild = nullptr;
 
     constexpr unsigned int randomPriority() const { return keyDistribution(randomGenerator); }
-    void updateNode() {
+    void updateNode()
+    {
         subtreeSize = 1 + (leftChild ? leftChild->subtreeSize : 0) + (rightChild ? rightChild->subtreeSize : 0);
 
-        #if TREAP_KEY_SUM
+#if TREAP_KEY_SUM
         subtreeSum = key + (leftChild ? leftChild->key : 0) + (rightChild ? rightChild->key : 0);
-        #endif
+#endif
     }
 
     constexpr TreapNode<_keyType> *&getChildFromEnum(enum TreapNode::Child childType) { return (childType == LeftChild ? leftChild : rightChild); }
 
 public:
-    TreapNode(_keyType _key = _keyType()) : 
-    #if TREAP_KEY_SUM
-        subtreeSum(_key),
-    #endif
-    key(_key), priority(randomPriority()) {}
+    TreapNode(_keyType _key = _keyType()) :
+#if TREAP_KEY_SUM
+                                            subtreeSum(_key),
+#endif
+                                            key(_key), priority(randomPriority())
+    {
+    }
 
-    TreapNode(_keyType _key, unsigned int _priority) : 
-    #if TREAP_KEY_SUM
-        subtreeSum(_key),
-    #endif
-    key(_key), priority(_priority) {}
+    TreapNode(_keyType _key, unsigned int _priority) :
+#if TREAP_KEY_SUM
+                                                       subtreeSum(_key),
+#endif
+                                                       key(_key), priority(_priority)
+    {
+    }
 
+    constexpr unsigned int getSize() const { return subtreeSize; }
+    constexpr unsigned int getPriority() const { return priority; }
     constexpr _keyType getKey() const { return key; }
     constexpr TreapNode<_keyType> *getChild(enum TreapNode::Child childType) { return getChildFromEnum(childType); }
 
-    #if TREAP_KEY_SUM
-    constexpr _keyType getSum() const { return subtreeSum; }
-    #endif
+#if TREAP_KEY_SUM
+    constexpr _keyType getSum() const
+    {
+        return subtreeSum;
+    }
+#endif
 
-    void attachChild(TreapNode<_keyType> *newChild, enum TreapNode::Child childType)
+    void attachChild(enum TreapNode::Child childType, TreapNode<_keyType> *newChild)
     {
         TreapNode<_keyType> *&child = getChildFromEnum(childType);
         if (child)
@@ -94,14 +103,147 @@ public:
 };
 
 template <class _keyType = int>
-struct Treap
+class Treap
 {
+    std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> splitNode(TreapNode<_keyType> *node, _keyType splitKey)
+    {
+        if (!node)
+            return {nullptr, nullptr};
+
+        if (splitKey < node->getKey())
+        {
+            TreapNode<_keyType> *left = node->detachChild(TreapNode<>::LeftChild);
+            std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> leftSplit = splitNode(left, splitKey);
+
+            node->attachChild(TreapNode<>::LeftChild, leftSplit.second);
+
+            return {leftSplit.first, node};
+        }
+        else
+        {
+            TreapNode<_keyType> *right = node->detachChild(TreapNode<>::RightChild);
+            std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> rightSplit = splitNode(right, splitKey);
+
+            node->attachChild(TreapNode<>::RightChild, rightSplit.first);
+
+            return {node, rightSplit.second};
+        }
+    }
+
+    TreapNode<_keyType> *mergeNodes(TreapNode<_keyType> *first, TreapNode<_keyType> *second)
+    {
+
+        if (!first)
+            return second;
+
+        if (!second)
+            return first;
+
+        TreapNode<_keyType> *lesserNode = first;
+        TreapNode<_keyType> *greaterNode = second;
+
+        if (lesserNode->getKey() > greaterNode->getKey())
+            std::swap(lesserNode, greaterNode);
+
+        if (lesserNode->getPriority() < greaterNode->getPriority())
+        {
+            greaterNode->attachChild(
+                TreapNode<>::LeftChild,
+                mergeNodes(
+                    lesserNode,
+                    greaterNode->detachChild(TreapNode<>::LeftChild)));
+
+            return greaterNode;
+        }
+        else
+        {
+            lesserNode->attachChild(
+                TreapNode<>::RightChild,
+                mergeNodes(
+                    greaterNode,
+                    lesserNode->detachChild(TreapNode<>::RightChild)));
+
+            return lesserNode;
+        }
+    }
+
+    TreapNode<_keyType> *insertNode(TreapNode<_keyType> *node)
+    {
+        if (!node)
+            return root;
+
+        if (node->getSize() > 1)
+            throw std::runtime_error("TreapNode error: Trying to insert a node with children");
+
+        auto rootSplit = splitNode(root, node->getKey());
+
+        TreapNode<_keyType> *leftMerge = mergeNodes(node, rootSplit.first);
+
+        return mergeNodes(leftMerge, rootSplit.second);
+    }
+
+    std::pair<bool, TreapNode<_keyType> *> eraseNode(_keyType key)
+    {
+        auto rootSplit = splitNode(root, key);
+        auto leftSplit = splitNode(rootSplit.first, key - 1);
+
+        TreapNode<_keyType> *newRoot = mergeNodes(leftSplit.first, rootSplit.second);
+
+        if (leftSplit.second != nullptr)
+        {
+            delete leftSplit.second;
+            return {true, newRoot};
+        }
+        return {false, newRoot};
+    }
+
+public:
     TreapNode<_keyType> *root;
 
     Treap(TreapNode<_keyType> *_root = nullptr) : root(_root) {}
     Treap(const std::vector<_keyType> &keys)
     {
         // TO DO : create bst from a vector
+    }
+
+    constexpr unsigned int size() const { return (root ? root->getSize() : 0); }
+
+    std::pair<Treap<_keyType>, Treap<_keyType>> split(_keyType key)
+    {
+        // Splits treap into two in a std::pair:
+        // - first with keys less than splitKey
+        // - second with keys greater or equal to splitKey
+
+        std::pair<Treap<_keyType *>, Treap<_keyType *>> splitResult = splitNode(root, key);
+
+        return {Treap(splitResult.first), Treap(splitResult.second)};
+    }
+
+    void merge(const Treap<_keyType> &other)
+    {
+        // Merges current treap with other, all keys from current tree must be:
+        // - either less than any key from the other
+        // - or greater or equal to any key from the other
+
+        root = mergeNodes(root, other.root);
+    }
+
+    void insert(TreapNode<_keyType> *node)
+    {
+        root = insertNode(node);
+    }
+
+    void insert(_keyType key)
+    {
+        insert(new TreapNode<_keyType>(key));
+    }
+
+    bool erase(_keyType key)
+    {
+        std::pair<bool, TreapNode<_keyType> *> result = eraseNode(key);
+        root = result.second;
+
+        return result.first;
     }
 
     ~Treap()
@@ -111,11 +253,47 @@ struct Treap
     }
 };
 
-TreapNode<> tr;
+Treap<> tr;
+
+template <class _keyType>
+void printStructure(std::ostream &out, TreapNode<_keyType> *node, unsigned int indent = 0)
+{
+    for (unsigned int i = 0; i < indent; ++i)
+        out << '\t';
+
+    if (!node)
+    {
+        out << "-\n";
+        return;
+    }
+
+    out << node->getKey() << " (P = " << node->getPriority() << ")\n";
+    printStructure(out, node->getChild(TreapNode<>::LeftChild), indent + 1);
+    printStructure(out, node->getChild(TreapNode<>::RightChild), indent + 1);
+}
+
+template <class _keyType>
+std::ostream &operator<<(std::ostream &out, const Treap<_keyType> &treap)
+{
+    out << "Treap:\n";
+    out << "Size: " << treap.size() << "\n";
+
+    printStructure(out, treap.root);
+
+    return out;
+}
 
 int main()
 {
-    tr.attachChild(new TreapNode<>(), TreapNode<>::LeftChild);
-    std::cout << tr.getChild(TreapNode<>::LeftChild)->getKey() << "\n";
+    tr.insert(6);
+    tr.insert(5);
+    tr.insert(2);
+    tr.insert(3);
+    tr.insert(4);
+    tr.erase(3);
+    tr.erase(2);
+    tr.erase(1);
+    tr.insert(1);
+    std::cout << tr << "\n";
     return 0;
 }
