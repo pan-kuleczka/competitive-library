@@ -197,6 +197,42 @@ class Treap
         return {false, newRoot};
     }
 
+    TreapNode<_keyType> *findNodeByKey(TreapNode<_keyType> *node, _keyType key)
+    {
+        if (!node)
+            return nullptr;
+
+        _keyType nodeKey = node->getKey();
+
+        if (key < nodeKey)
+            return findNodeByKey(node->getChild(TreapNode<>::LeftChild), key);
+        else if (key == nodeKey)
+            return node;
+        else
+            return findNodeByKey(node->getChild(TreapNode<>::RightChild), key);
+    }
+
+    TreapNode<_keyType> *findNodeByOrder(TreapNode<_keyType> *node, unsigned int order)
+    {
+        if (!node)
+            return nullptr;
+
+        if (order >= node->getSize())
+            return nullptr;
+
+        TreapNode<_keyType> *leftChild = node->getChild(TreapNode<>::LeftChild);
+        TreapNode<_keyType> *rightChild = node->getChild(TreapNode<>::RightChild);
+
+        unsigned int leftSize = (leftChild ? leftChild->getSize() : 0);
+
+        if (order < leftSize)
+            return findNodeByOrder(leftChild, order);
+        else if (order == leftSize)
+            return node;
+        else
+            return findNodeByOrder(rightChild, order - leftSize - 1);
+    }
+
 public:
     TreapNode<_keyType> *root;
 
@@ -207,6 +243,40 @@ public:
     }
 
     constexpr unsigned int size() const { return (root ? root->getSize() : 0); }
+
+    void insert(TreapNode<_keyType> *node)
+    {
+        root = insertNode(node);
+    }
+
+    void insert(_keyType key)
+    {
+        insert(new TreapNode<_keyType>(key));
+    }
+
+    bool erase(_keyType key)
+    {
+        std::pair<bool, TreapNode<_keyType> *> result = eraseNode(key);
+        root = result.second;
+
+        return result.first;
+    }
+
+    TreapNode<_keyType> *findByKey(_keyType key)
+    {
+        // Returns pointer to the node with a key equal to given
+        // If the node does not exist returns nullptr instead
+
+        return findNodeByKey(root, key);
+    }
+
+    TreapNode<_keyType> *findByOrder(unsigned int order)
+    {
+        // Returns pointer to the node with given order in a treap
+        // If the node does not exist (order >= size()) returns nullptr instead
+
+        return findNodeByOrder(root, order);
+    }
 
     std::pair<Treap<_keyType>, Treap<_keyType>> split(_keyType key)
     {
@@ -228,32 +298,12 @@ public:
         root = mergeNodes(root, other.root);
     }
 
-    void insert(TreapNode<_keyType> *node)
-    {
-        root = insertNode(node);
-    }
-
-    void insert(_keyType key)
-    {
-        insert(new TreapNode<_keyType>(key));
-    }
-
-    bool erase(_keyType key)
-    {
-        std::pair<bool, TreapNode<_keyType> *> result = eraseNode(key);
-        root = result.second;
-
-        return result.first;
-    }
-
     ~Treap()
     {
         if (root)
             delete root;
     }
 };
-
-Treap<> tr;
 
 template <class _keyType>
 void printStructure(std::ostream &out, TreapNode<_keyType> *node, unsigned int indent = 0)
@@ -283,6 +333,8 @@ std::ostream &operator<<(std::ostream &out, const Treap<_keyType> &treap)
     return out;
 }
 
+Treap<> tr;
+
 int main()
 {
     tr.insert(6);
@@ -295,5 +347,6 @@ int main()
     tr.erase(1);
     tr.insert(1);
     std::cout << tr << "\n";
+    std::cout << tr.findByOrder(1)->getKey() << "\n";
     return 0;
 }
