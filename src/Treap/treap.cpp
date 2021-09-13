@@ -66,6 +66,7 @@ public:
     constexpr unsigned int getSize() const { return subtreeSize; }
     constexpr unsigned int getPriority() const { return priority; }
     constexpr _keyType getKey() const { return key; }
+    constexpr _keyType &getKeyReference() { return key; }
     constexpr TreapNode<_keyType> *getChild(enum TreapNode::Child childType) { return getChildFromEnum(childType); }
 
 #if TREAP_KEY_SUM
@@ -308,15 +309,17 @@ public:
 template <class _keyType = int>
 class ImplicitTreap
 {
-    std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> splitNode(TreapNode<_keyType> *node, _keyType splitKey)
+    std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> splitNode(TreapNode<_keyType> *node, std::size_t position)
     {
         if (!node)
             return {nullptr, nullptr};
 
-        if (splitKey < node->getKey())
+        std::size_t leftChildSubtreeSize = (node->getChild(TreapNode<>::LeftChild) ? node->getChild(TreapNode<>::LeftChild)->subtreeSize : 0);
+
+        if (position < leftChildSubtreeSize)
         {
             TreapNode<_keyType> *left = node->detachChild(TreapNode<>::LeftChild);
-            std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> leftSplit = splitNode(left, splitKey);
+            std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> leftSplit = splitNode(left, position);
 
             node->attachChild(TreapNode<>::LeftChild, leftSplit.second);
 
@@ -325,7 +328,7 @@ class ImplicitTreap
         else
         {
             TreapNode<_keyType> *right = node->detachChild(TreapNode<>::RightChild);
-            std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> rightSplit = splitNode(right, splitKey);
+            std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> rightSplit = splitNode(right, position - leftChildSubtreeSize - 1);
 
             node->attachChild(TreapNode<>::RightChild, rightSplit.first);
 
@@ -345,9 +348,6 @@ class ImplicitTreap
         TreapNode<_keyType> *lesserNode = first;
         TreapNode<_keyType> *greaterNode = second;
 
-        if (lesserNode->getKey() > greaterNode->getKey())
-            std::swap(lesserNode, greaterNode);
-
         if (lesserNode->getPriority() < greaterNode->getPriority())
         {
             greaterNode->attachChild(
@@ -363,14 +363,14 @@ class ImplicitTreap
             lesserNode->attachChild(
                 TreapNode<>::RightChild,
                 mergeNodes(
-                    greaterNode,
-                    lesserNode->detachChild(TreapNode<>::RightChild)));
+                    lesserNode->detachChild(TreapNode<>::RightChild)),
+                greaterNode);
 
             return lesserNode;
         }
     }
 
-    TreapNode<_keyType> *insertNode(TreapNode<_keyType> *node)
+    TreapNode<_keyType> *insertNode(TreapNode<_keyType> *node, std::size_t position)
     {
         if (!node)
             return root;
@@ -378,62 +378,47 @@ class ImplicitTreap
         if (node->getSize() > 1)
             throw std::runtime_error("TreapNode error: Trying to insert a node with children");
 
-        auto rootSplit = splitNode(root, node->getKey());
+        auto rootSplit = splitNode(root, position);
 
-        TreapNode<_keyType> *leftMerge = mergeNodes(node, rootSplit.first);
+        TreapNode<_keyType> *leftMerge = mergeNodes(rootSplit.first, node);
 
         return mergeNodes(leftMerge, rootSplit.second);
     }
 
-    std::pair<bool, TreapNode<_keyType> *> eraseNode(_keyType key)
+    std::pair<bool, TreapNode<_keyType> *> eraseNode(std::size_t position)
     {
-        auto rootSplit = splitNode(root, key);
-        auto leftSplit = splitNode(rootSplit.first, key - 1);
+        auto rootSplit = splitNode(root, position);
+        auto rightSplit = splitNode(rootSplit.second, position + 1);
 
-        TreapNode<_keyType> *newRoot = mergeNodes(leftSplit.first, rootSplit.second);
+        TreapNode<_keyType> *newRoot = mergeNodes(rootSplit.first, rightSplit.second);
 
-        if (leftSplit.second != nullptr)
+        if (rightSplit.first != nullptr)
         {
-            delete leftSplit.second;
+            delete rightSplit.first;
             return {true, newRoot};
         }
         return {false, newRoot};
     }
 
-    TreapNode<_keyType> *findNodeByKey(TreapNode<_keyType> *node, _keyType key)
+    TreapNode<_keyType> *findNodeByPosition(TreapNode<_keyType> *node, std::size_t position)
     {
         if (!node)
             return nullptr;
 
-        _keyType nodeKey = node->getKey();
-
-        if (key < nodeKey)
-            return findNodeByKey(node->getChild(TreapNode<>::LeftChild), key);
-        else if (key == nodeKey)
-            return node;
-        else
-            return findNodeByKey(node->getChild(TreapNode<>::RightChild), key);
-    }
-
-    TreapNode<_keyType> *findNodeByOrder(TreapNode<_keyType> *node, unsigned int order)
-    {
-        if (!node)
-            return nullptr;
-
-        if (order >= node->getSize())
+        if (position >= node->getSize())
             return nullptr;
 
         TreapNode<_keyType> *leftChild = node->getChild(TreapNode<>::LeftChild);
         TreapNode<_keyType> *rightChild = node->getChild(TreapNode<>::RightChild);
 
-        unsigned int leftSize = (leftChild ? leftChild->getSize() : 0);
+        std::size_t leftSize = (leftChild ? leftChild->getSize() : 0);
 
-        if (order < leftSize)
-            return findNodeByOrder(leftChild, order);
-        else if (order == leftSize)
+        if (position < leftSize)
+            return findNodeByPosition(leftChild, position);
+        else if (position == leftSize)
             return node;
         else
-            return findNodeByOrder(rightChild, order - leftSize - 1);
+            return findNodeByOrder(rightChild, position - leftSize - 1);
     }
 
 public:
@@ -465,12 +450,20 @@ public:
         return result.first;
     }
 
-    TreapNode<_keyType> *findByOrder(unsigned int order)
+    TreapNode<_keyType> *findByPosition(std::size_t position)
     {
-        // Returns pointer to the node with given order in a treap
-        // If the node does not exist (order >= size()) returns nullptr instead
+        // Returns pointer to the node with given position in a treap
+        // If the node does not exist (position >= size()) returns nullptr instead
 
-        return findNodeByOrder(root, order);
+        return findNodeByPosition(root, position);
+    }
+
+    _keyType &operator[](std::size_t position)
+    {
+        TreapNode<_keyType> node = findNodeByPosition(position);
+        if (!node)
+            throw std::runtime_error("ImplicitTreap error: operator[] out of bounds");
+        return node.getKeyReference();
     }
 
     std::pair<Treap<_keyType>, Treap<_keyType>> split(std::size_t position)
