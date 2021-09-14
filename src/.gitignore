@@ -1,4 +1,5 @@
-# Ignore extensionless files (binaries)
+# Ignore extensionless files and .exe files (binaries)
 *
 !*/
 !*.*
+*.exe

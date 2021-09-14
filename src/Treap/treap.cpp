@@ -76,6 +76,31 @@ public:
     }
 #endif
 
+#if TREAP_REVERSE_OPERATION
+    void reverse()
+    {
+        reversed = !reversed;
+    }
+#endif
+
+    void pushUpdates()
+    {
+#if TREAP_REVERSE_OPERATION
+        if (reversed)
+        {
+            TreapNode<_keyType> *leftChild = detachChild(TreapNode<>::LeftChild);
+            TreapNode<_keyType> *rightChild = detachChild(TreapNode<>::RightChild);
+            if (leftChild)
+                leftChild->reverse();
+            if (rightChild)
+                rightChild->reverse();
+            attachChild(TreapNode<>::LeftChild, rightChild);
+            attachChild(TreapNode<>::RightChild, leftChild);
+            reversed = false;
+        }
+#endif
+    }
+
     void attachChild(enum TreapNode::Child childType, TreapNode<_keyType> *newChild)
     {
         TreapNode<_keyType> *&child = getChildFromEnum(childType);
@@ -314,7 +339,9 @@ class ImplicitTreap
         if (!node)
             return {nullptr, nullptr};
 
-        std::size_t leftChildSubtreeSize = (node->getChild(TreapNode<>::LeftChild) ? node->getChild(TreapNode<>::LeftChild)->subtreeSize : 0);
+        node->pushUpdates();
+
+        std::size_t leftChildSubtreeSize = (node->getChild(TreapNode<>::LeftChild) ? node->getChild(TreapNode<>::LeftChild)->getSize() : 0);
 
         if (position < leftChildSubtreeSize)
         {
@@ -346,7 +373,10 @@ class ImplicitTreap
             return first;
 
         TreapNode<_keyType> *lesserNode = first;
+        lesserNode->pushUpdates();
+
         TreapNode<_keyType> *greaterNode = second;
+        greaterNode->pushUpdates();
 
         if (lesserNode->getPriority() < greaterNode->getPriority())
         {
@@ -363,8 +393,8 @@ class ImplicitTreap
             lesserNode->attachChild(
                 TreapNode<>::RightChild,
                 mergeNodes(
-                    lesserNode->detachChild(TreapNode<>::RightChild)),
-                greaterNode);
+                    lesserNode->detachChild(TreapNode<>::RightChild),
+                    greaterNode));
 
             return lesserNode;
         }
@@ -374,6 +404,8 @@ class ImplicitTreap
     {
         if (!node)
             return root;
+
+        node->pushUpdates();
 
         if (node->getSize() > 1)
             throw std::runtime_error("TreapNode error: Trying to insert a node with children");
@@ -408,6 +440,8 @@ class ImplicitTreap
         if (position >= node->getSize())
             return nullptr;
 
+        node->pushUpdates();
+
         TreapNode<_keyType> *leftChild = node->getChild(TreapNode<>::LeftChild);
         TreapNode<_keyType> *rightChild = node->getChild(TreapNode<>::RightChild);
 
@@ -418,8 +452,28 @@ class ImplicitTreap
         else if (position == leftSize)
             return node;
         else
-            return findNodeByOrder(rightChild, position - leftSize - 1);
+            return findNodeByPosition(rightChild, position - leftSize - 1);
     }
+
+#if TREAP_REVERSE_OPERATION
+    void reverseRange(std::size_t begin, std::size_t end)
+    {
+        if (!root)
+            return;
+        if (end > root->getSize())
+            throw std::runtime_error("ImplicitTreap error: reverse out of bounds");
+        if (begin > end)
+            throw std::runtime_error("ImplicitTreap error: reverse begin > end");
+
+        std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> leftSplit = splitNode(root, begin);
+        std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> rightSplit = splitNode(leftSplit.second, end);
+
+        rightSplit.first->reverse();
+
+        TreapNode<_keyType> *leftMerge = mergeNodes(leftSplit.first, rightSplit.first);
+        root = mergeNodes(leftMerge, rightSplit.second);
+    }
+#endif
 
 public:
     TreapNode<_keyType> *root;
@@ -440,6 +494,16 @@ public:
     void insert(_keyType key, std::size_t position)
     {
         insert(new TreapNode<_keyType>(key), position);
+    }
+
+    void push_back(TreapNode<_keyType> *node)
+    {
+        insert(node, (root ? root->getSize() : 0));
+    }
+
+    void push_back(_keyType key)
+    {
+        push_back(new TreapNode<_keyType>(key));
     }
 
     bool erase(std::size_t position)
@@ -474,7 +538,7 @@ public:
 
         std::pair<Treap<_keyType *>, Treap<_keyType *>> splitResult = splitNode(root, position);
 
-        return {Treap(splitResult.first), Treap(splitResult.second)};
+        return {Treap<_keyType>(splitResult.first), Treap<_keyType>(splitResult.second)};
     }
 
     void merge(const Treap<_keyType> &other)
@@ -483,6 +547,15 @@ public:
 
         root = mergeNodes(root, other.root);
     }
+
+#if TREAP_REVERSE_OPERATION
+    void reverse(std::size_t begin, std::size_t end)
+    {
+        // Reverses elements in a range from begin (inclusive) to end (exclusive) in the array
+
+        reverseRange(begin, end);
+    }
+#endif
 
     ~ImplicitTreap()
     {
@@ -503,9 +576,27 @@ void printStructure(std::ostream &out, TreapNode<_keyType> *node, unsigned int i
         return;
     }
 
+    node->pushUpdates();
+
     out << node->getKey() << " (P = " << node->getPriority() << ")\n";
     printStructure(out, node->getChild(TreapNode<>::LeftChild), indent + 1);
     printStructure(out, node->getChild(TreapNode<>::RightChild), indent + 1);
+}
+
+template <class _keyType>
+void printImplicitArray(std::ostream &out, TreapNode<_keyType> *node, bool initialCall = true)
+{
+    if (!node)
+        return;
+
+    node->pushUpdates();
+
+    printImplicitArray(out, node->getChild(TreapNode<>::LeftChild), false);
+    out << node->getKey() << " ";
+    printImplicitArray(out, node->getChild(TreapNode<>::RightChild), false);
+
+    if (initialCall)
+        out << "\n";
 }
 
 template <class _keyType>
@@ -519,11 +610,34 @@ std::ostream &operator<<(std::ostream &out, const Treap<_keyType> &treap)
     return out;
 }
 
+template <class _keyType>
+std::ostream &operator<<(std::ostream &out, const ImplicitTreap<_keyType> &treap)
+{
+    out << "ImplicitTreap:\n";
+    out << "Size: " << treap.size() << "\n";
+
+    printStructure(out, treap.root);
+    printImplicitArray(out, treap.root);
+
+    return out;
+}
+
 Treap<> tr;
+ImplicitTreap<> imtr;
 
 int main()
 {
-    tr.insert(6);
+    imtr.push_back(2);
+    imtr.push_back(4);
+    imtr.push_back(1254124);
+    imtr.push_back(2);
+    imtr.reverse(0, 2);    
+    std::cout << imtr << "\n";
+
+    for(int i = 0; i < 100; ++i) imtr.push_back(i);
+    
+
+    /*tr.insert(6);
     tr.insert(5);
     tr.insert(2);
     tr.insert(3);
@@ -533,6 +647,7 @@ int main()
     tr.erase(1);
     tr.insert(1);
     std::cout << tr << "\n";
-    std::cout << tr.findByOrder(1)->getKey() << "\n";
+    std::cout << tr.findByOrder(1)->getKey() << "\n";*/
+
     return 0;
 }
