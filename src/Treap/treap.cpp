@@ -343,7 +343,7 @@ class ImplicitTreap
 
         std::size_t leftChildSubtreeSize = (node->getChild(TreapNode<>::LeftChild) ? node->getChild(TreapNode<>::LeftChild)->getSize() : 0);
 
-        if (position < leftChildSubtreeSize)
+        if (position <= leftChildSubtreeSize)
         {
             TreapNode<_keyType> *left = node->detachChild(TreapNode<>::LeftChild);
             std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> leftSplit = splitNode(left, position);
@@ -468,7 +468,7 @@ class ImplicitTreap
         std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> leftSplit = splitNode(root, begin);
         std::pair<TreapNode<_keyType> *, TreapNode<_keyType> *> rightSplit = splitNode(leftSplit.second, end);
 
-        rightSplit.first->reverse();
+        if(rightSplit.first) rightSplit.first->reverse();
 
         TreapNode<_keyType> *leftMerge = mergeNodes(leftSplit.first, rightSplit.first);
         root = mergeNodes(leftMerge, rightSplit.second);
@@ -631,7 +631,7 @@ int main()
     imtr.push_back(4);
     imtr.push_back(1254124);
     imtr.push_back(2);
-    imtr.reverse(0, 2);    
+    imtr.reverse(0, 3);    
     std::cout << imtr << "\n";
 
     for(int i = 0; i < 100; ++i) imtr.push_back(i);
