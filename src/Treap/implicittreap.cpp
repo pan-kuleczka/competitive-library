@@ -354,26 +354,39 @@ public:
 
     void insert(ImplicitTreapNode<_keyType> *node, std::size_t position)
     {
+        // Inserts node before the element at position position
+        // If position is greater than the size of the array, it is inserted at the end
+
         root = insertNode(node, position);
     }
 
     void insert(_keyType key, std::size_t position)
     {
+        // Inserts a new ImplicitTreapNode with key key before the element at position position
+        // If position is greater than the size of the array, it is inserted at the end
+
         insert(new ImplicitTreapNode<_keyType>(key), position);
     }
 
     void push_back(ImplicitTreapNode<_keyType> *node)
     {
+        // Appends node to the array
+
         insert(node, (root ? root->getSize() : 0));
     }
 
     void push_back(_keyType key)
     {
+        // Appends a new ImplicitTreapNode with key key to the array
+
         push_back(new ImplicitTreapNode<_keyType>(key));
     }
 
     bool erase(std::size_t position)
     {
+        // Attempts to erase element on position position
+        // Returns whether the operation succeeded
+
         std::pair<bool, ImplicitTreapNode<_keyType> *> result = eraseNode(position);
         root = result.second;
 
@@ -489,7 +502,6 @@ std::ostream &operator<<(std::ostream &out, const ImplicitTreap<_keyType> &treap
     out << "ImplicitTreap:\n";
     out << "Size: " << treap.size() << "\n";
 
-    //printStructure(out, treap.root);
     printImplicitArray(out, treap.root);
 
     return out;
