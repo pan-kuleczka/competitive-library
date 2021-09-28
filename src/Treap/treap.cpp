@@ -19,6 +19,7 @@ private:
     unsigned int priority;
     unsigned int subtreeSize = 1;
 
+    ImplicitTreapNode<_keyType> *parent = nullptr;
     TreapNode<_keyType> *leftChild = nullptr;
     TreapNode<_keyType> *rightChild = nullptr;
 
@@ -26,6 +27,8 @@ private:
     void updateNode()
     {
         subtreeSize = 1 + (leftChild ? leftChild->subtreeSize : 0) + (rightChild ? rightChild->subtreeSize : 0);
+        if (parent)
+            parent->updateNode();
     }
 
     constexpr TreapNode<_keyType> *&getChildFromEnum(enum TreapNode::Child childType) { return (childType == LeftChild ? leftChild : rightChild); }
@@ -43,6 +46,7 @@ public:
     constexpr unsigned int getPriority() const { return priority; }
     constexpr _keyType getKey() const { return key; }
     constexpr _keyType &getKeyReference() { return key; }
+    constexpr TreapNode<_keyType> *getParent() { return parent; }
     constexpr TreapNode<_keyType> *getChild(enum TreapNode::Child childType) { return getChildFromEnum(childType); }
 
     void attachChild(enum TreapNode::Child childType, TreapNode<_keyType> *newChild)
@@ -50,7 +54,12 @@ public:
         TreapNode<_keyType> *&child = getChildFromEnum(childType);
         if (child)
             throw std::runtime_error("TreapNode error: Potential memory leak caused by an unsafe replacement of a child");
+        if (newChild->getParent())
+            throw std::runtime_error("TreapNode error: Potential memory leak caused by a node having two parents");
+
         child = newChild;
+        child->parent = this;
+
         updateNode();
     }
 
@@ -59,16 +68,22 @@ public:
         TreapNode<_keyType> *&child = getChildFromEnum(childType);
         TreapNode<_keyType> *detached = child;
         child = nullptr;
+        detached->parent = nullptr;
+
         updateNode();
         return detached;
     }
 
     ~TreapNode()
     {
+        if (parent)
+            throw std::runtime_error("TreapNode error: Potential memory leak caused by deletion of an owned child");
         if (leftChild)
-            delete leftChild;
+            leftChild->parent = nullptr;
+        delete leftChild;
         if (rightChild)
-            delete rightChild;
+            rightChild->parent = nullptr;
+        delete rightChild;
     }
 };
 

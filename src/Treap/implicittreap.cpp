@@ -1,9 +1,10 @@
 #include <bits/stdc++.h>
 
 // Conditional compilation to reduce memory and time requirements (select only the features you need)
-#define TREAP_KEY_SUM true           // adds information about sum of the keys in a subtree
-#define TREAP_KEY_ADD true           // adds operation adding to all elements in a range
-#define TREAP_REVERSE_OPERATION true // adds operation reversing a subtree
+#define TREAP_KEY_SUM true     // adds information about sum of the keys in a subtree
+#define TREAP_KEY_ADD true     // adds operation adding to all elements in a range
+#define TREAP_KEY_SET true     // adds operation setting all elements in a range
+#define TREAP_KEY_REVERSE true // adds operation reversing a subtree
 
 std::random_device rd;
 std::mt19937 randomGenerator(rd());
@@ -28,7 +29,11 @@ private:
     _keyType additionLazy = _keyType(0);
 #endif
 
-#if TREAP_REVERSE_OPERATION
+#if TREAP_KEY_SET
+    std::pair<bool, _keyType> settingLazy = {false, _keyType(0)};
+#endif
+
+#if TREAP_KEY_REVERSE
     bool reversed = false;
 #endif
 
@@ -36,6 +41,7 @@ private:
     unsigned int priority;
     unsigned int subtreeSize = 1;
 
+    ImplicitTreapNode<_keyType> *parent = nullptr;
     ImplicitTreapNode<_keyType> *leftChild = nullptr;
     ImplicitTreapNode<_keyType> *rightChild = nullptr;
 
@@ -43,28 +49,29 @@ private:
     void updateNode()
     {
         subtreeSize = 1 + (leftChild ? leftChild->subtreeSize : 0) + (rightChild ? rightChild->subtreeSize : 0);
-
 #if TREAP_KEY_SUM
         subtreeSum = key + (leftChild ? leftChild->key : 0) + (rightChild ? rightChild->key : 0);
 #endif
+        if (parent)
+            parent->updateNode();
     }
 
     constexpr ImplicitTreapNode<_keyType> *&getChildFromEnum(enum ImplicitTreapNode::Child childType) { return (childType == LeftChild ? leftChild : rightChild); }
 
 public:
-    ImplicitTreapNode(_keyType _key = _keyType()) :
+    ImplicitTreapNode(const _keyType &_key = _keyType()) :
 #if TREAP_KEY_SUM
-                                                    subtreeSum(_key),
+                                                           subtreeSum(_key),
 #endif
-                                                    key(_key), priority(randomPriority())
+                                                           key(_key), priority(randomPriority())
     {
     }
 
-    ImplicitTreapNode(_keyType _key, unsigned int _priority) :
+    ImplicitTreapNode(const _keyType &_key, unsigned int _priority) :
 #if TREAP_KEY_SUM
-                                                               subtreeSum(_key),
+                                                                      subtreeSum(_key),
 #endif
-                                                               key(_key), priority(_priority)
+                                                                      key(_key), priority(_priority)
     {
     }
 
@@ -72,23 +79,34 @@ public:
     constexpr unsigned int getPriority() const { return priority; }
     constexpr _keyType getKey() const { return key; }
     constexpr _keyType &getKeyReference() { return key; }
+    constexpr ImplicitTreapNode<_keyType> *getParent() { return parent; }
     constexpr ImplicitTreapNode<_keyType> *getChild(enum ImplicitTreapNode::Child childType) { return getChildFromEnum(childType); }
 
 #if TREAP_KEY_SUM
-    constexpr _keyType getSum() const
+    constexpr _keyType getSum()
     {
+        pushUpdates();
         return subtreeSum;
     }
 #endif
 
 #if TREAP_KEY_ADD
-    void add(_keyType delta)
+    void add(const _keyType &delta)
     {
+        pushUpdates();
         additionLazy += delta;
     }
 #endif
 
-#if TREAP_REVERSE_OPERATION
+#if TREAP_KEY_SET
+    void set(const _keyType &newValue)
+    {
+        pushUpdates();
+        settingLazy = {true, newValue};
+    }
+#endif
+
+#if TREAP_KEY_REVERSE
     void reverse()
     {
         reversed = !reversed;
@@ -97,7 +115,7 @@ public:
 
     void pushUpdates()
     {
-#if TREAP_REVERSE_OPERATION
+#if TREAP_KEY_REVERSE
         if (reversed)
         {
             ImplicitTreapNode<_keyType> *leftChild = detachChild(ImplicitTreapNode<>::LeftChild);
@@ -115,11 +133,24 @@ public:
         if (additionLazy != _keyType(0))
         {
             key += additionLazy;
+            sum = ...
             if (leftChild)
                 leftChild->add(additionLazy);
             if (rightChild)
                 rightChild->add(additionLazy);
             additionLazy = _keyType(0);
+        }
+#endif
+#if TREAP_KEY_SET
+        if (settingLazy.first)
+        {
+            key = settingLazy.second;
+            sum = ...
+            if (leftChild)
+                leftChild->set(settingLazy.second);
+            if (rightChild)
+                rightChild->set(settingLazy.second);
+            settingLazy = {false, _keyType(0)};
         }
 #endif
     }
@@ -129,7 +160,12 @@ public:
         ImplicitTreapNode<_keyType> *&child = getChildFromEnum(childType);
         if (child)
             throw std::runtime_error("TreapNode error: Potential memory leak caused by an unsafe replacement of a child");
+        if (newChild->getParent())
+            throw std::runtime_error("TreapNode error: Potential memory leak caused by a node having two parents");
+
         child = newChild;
+        child->parent = this;
+
         updateNode();
     }
 
@@ -138,16 +174,22 @@ public:
         ImplicitTreapNode<_keyType> *&child = getChildFromEnum(childType);
         ImplicitTreapNode<_keyType> *detached = child;
         child = nullptr;
+        detached->parent = nullptr;
+
         updateNode();
         return detached;
     }
 
     ~ImplicitTreapNode()
     {
+        if (parent)
+            throw std::runtime_error("TreapNode error: Potential memory leak caused by deletion of an owned child");
         if (leftChild)
-            delete leftChild;
+            leftChild->parent = nullptr;
+        delete leftChild;
         if (rightChild)
-            delete rightChild;
+            rightChild->parent = nullptr;
+        delete rightChild;
     }
 };
 
@@ -304,7 +346,6 @@ class ImplicitTreap
 
         if (splitTreap[1])
         {
-            splitTreap[1]->pushUpdates();
             result = splitTreap[1]->getSum();
         }
 
@@ -314,7 +355,7 @@ class ImplicitTreap
 #endif
 
 #if TREAP_KEY_ADD
-    _keyType addRangeOperation(std::size_t begin, std::size_t end, const _keyType &delta)
+    void addRangeOperation(std::size_t begin, std::size_t end, const _keyType &delta)
     {
         std::array<ImplicitTreapNode<_keyType> *, 3> splitTreap = splitByRange(begin, end);
 
@@ -327,7 +368,21 @@ class ImplicitTreap
     }
 #endif
 
-#if TREAP_REVERSE_OPERATION
+#if TREAP_KEY_SET
+    void setRangeOperation(std::size_t begin, std::size_t end, const _keyType &newValue)
+    {
+        std::array<ImplicitTreapNode<_keyType> *, 3> splitTreap = splitByRange(begin, end);
+
+        if (splitTreap[1])
+        {
+            splitTreap[1]->set(newValue);
+        }
+
+        mergeRanges(splitTreap);
+    }
+#endif
+
+#if TREAP_KEY_REVERSE
     void reverseRangeOperation(std::size_t begin, std::size_t end)
     {
         std::array<ImplicitTreapNode<_keyType> *, 3> splitTreap = splitByRange(begin, end);
@@ -437,15 +492,24 @@ public:
 #endif
 
 #if TREAP_KEY_ADD
-    _keyType addRange(std::size_t begin, std::size_t end, const _keyType &delta)
+    void addRange(std::size_t begin, std::size_t end, const _keyType &delta)
     {
         // Adds delta to elements in a range from begin (inclusive) to end (exclusive) in the array
 
-        return addRangeOperation(begin, end, delta);
+        addRangeOperation(begin, end, delta);
     }
 #endif
 
-#if TREAP_REVERSE_OPERATION
+#if TREAP_KEY_SET
+    void setRange(std::size_t begin, std::size_t end, const _keyType &newValue)
+    {
+        // Sets elements in a range from begin (inclusive) to end (exclusive) in the array to newValue
+
+        setRangeOperation(begin, end, newValue);
+    }
+#endif
+
+#if TREAP_KEY_REVERSE
     void reverseRange(std::size_t begin, std::size_t end)
     {
         // Reverses elements in a range from begin (inclusive) to end (exclusive) in the array
@@ -511,10 +575,64 @@ ImplicitTreap<> imtr;
 
 int main()
 {
-    for (int i = 0; i < 100; ++i)
-        imtr.push_back(i);
-    imtr.reverseRange(0, 100);
+    std::cout << "Enter size: ";
+    int n;
+    std::cin >> n;
+    for (int i = 0; i < n; ++i)
+        imtr.push_back(0);
     std::cout << imtr << "\n";
-    std::cout << imtr.getRangeSum(0, 2) << "\n";
+
+    std::string command;
+    int args[3];
+
+    while (true)
+    {
+
+        std::cin >> command;
+
+        if (command == "EXIT")
+            break;
+
+#if TREAP_KEY_SUM
+        else if (command == "SUM")
+        {
+            std::cin >> args[0] >> args[1];
+            std::cout << "SUM ON (" << args[0] << ", " << args[1] << "] = " << imtr.getRangeSum(args[0], args[1]) << "\n";
+        }
+#endif
+
+#if TREAP_KEY_ADD
+        else if (command == "ADD")
+        {
+            std::cin >> args[0] >> args[1] >> args[2];
+            imtr.addRange(args[0], args[1], args[2]);
+            std::cout << "ADDED " << args[2] << " ON (" << args[0] << ", " << args[1] << "]\n";
+            std::cout << imtr << "\n";
+        }
+#endif
+
+#if TREAP_KEY_SET
+        else if (command == "SET")
+        {
+            std::cin >> args[0] >> args[1] >> args[2];
+            imtr.setRange(args[0], args[1], args[2]);
+            std::cout << "SET " << args[2] << " ON (" << args[0] << ", " << args[1] << "]\n";
+            std::cout << imtr << "\n";
+        }
+#endif
+
+#if TREAP_KEY_REVERSE
+        else if (command == "REVERSE" || command == "REV")
+        {
+            std::cin >> args[0] >> args[1];
+            imtr.reverseRange(args[0], args[1]);
+            std::cout << "REVERSED (" << args[0] << ", " << args[1] << "]\n";
+            std::cout << imtr << "\n";
+        }
+#endif
+        else
+            std::cout << "UNKNOWN COMMAND.\n";
+    }
+
     return 0;
 }
