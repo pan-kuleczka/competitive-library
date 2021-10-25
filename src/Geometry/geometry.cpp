@@ -37,6 +37,37 @@ struct VectorBase
         return *this;
     }
 
+    _derivedType operator*(_T x)
+    {
+        _derivedType prodVector = _derivedType();
+        for (unsigned int i = 0; i < _dimension; ++i)
+            prodVector.coordinates[i] = this->coordinates[i] * x;
+        return prodVector;
+    }
+
+    _derivedType &operator*=(_T x)
+    {
+        *this = *this * x;
+        return *this;
+    }
+
+    _derivedType operator/(_T x)
+    {
+        if (x == _T(0))
+            throw std::runtime_error("VectorBase math error: division by 0");
+
+        _derivedType prodVector = _derivedType();
+        for (unsigned int i = 0; i < _dimension; ++i)
+            prodVector.coordinates[i] = this->coordinates[i] / x;
+        return prodVector;
+    }
+
+    _derivedType &operator/=(_T x)
+    {
+        *this = *this / x;
+        return *this;
+    }
+
     template <class __derivedType>
     _T dotProduct(const VectorBase<__derivedType, _dimension, _T> &other)
     {
@@ -48,7 +79,31 @@ struct VectorBase
 
     template <class __derivedType>
     _T operator*(const VectorBase<__derivedType, _dimension, _T> &other) { return dotProduct(other); }
+
+    _T lengthSquare()
+    {
+        _T result = _T(0);
+        for (unsigned int i = 0; i < _dimension; ++i)
+            result += this->coordinates[i] * this->coordinates[i];
+        return result;
+    }
+
+    _T length()
+    {
+        return sqrt(this->lengthSquare());
+    }
+
+    _derivedType normalized()
+    {
+        return *this / this->length();
+    }
 };
+
+template <class _derivedType, unsigned int _dimension, class _T = long double>
+_T abs(VectorBase<_derivedType, _dimension, _T> vec)
+{
+    return sqrt(vec.lengthSquare());
+}
 
 template <class _derivedType, unsigned int _dimension, class _T = long double>
 std::ostream &operator<<(std::ostream &stream, VectorBase<_derivedType, _dimension, _T> vec)
@@ -98,9 +153,6 @@ struct Vector4 : VectorBase<Vector4<_T>, 4, _T>
 
 int main()
 {
-    Vector3 v({1, 0, 0});
-    Vector3 u({0, 1, 0});
-    Vector3 t = v.crossProduct(u);
-
-    std::cout << t << "\n";
+    Vector4 v({1, 1, 1});
+    std::cout << v.normalized().x << " " << v.normalized().length() << "\n";
 }
